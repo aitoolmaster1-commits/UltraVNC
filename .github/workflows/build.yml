@@ -35,8 +35,8 @@ jobs:
         run: |
           cd C:\vcpkg
           .\vcpkg.exe integrate install
-          # Install zlib and common compression codecs
-          .\vcpkg.exe install zlib:x64-windows libjpeg-turbo:x64-windows lzo:x64-windows zstd:x64-windows
+          # UltraVNC CMake-এর জন্য প্রয়োজনীয় সব কম্প্রেশন ও ইমেজ লাইব্রেরি
+          .\vcpkg.exe install zlib:x64-windows liblzma:x64-windows libjpeg-turbo:x64-windows lzo:x64-windows zstd:x64-windows
 
       - name: Configure and Build via CMake
         shell: pwsh
@@ -44,13 +44,13 @@ jobs:
           New-Item -ItemType Directory -Path "build_x64" -Force
           Set-Location "build_x64"
 
-          # Configure CMake with vcpkg toolchain integration
+          # CMake কনফিগারেশন vcpkg টুলচেনসহ
           cmake ../cmake -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET="x64-windows"
 
-          # Compile the entire solution
+          # প্যারালাল বিল্ড
           cmake --build . --config Release --parallel
 
       - name: Collect Binaries
@@ -58,7 +58,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path "output" -Force
           
-          # Copy all generated executable and dll files
+          # তৈরি হওয়া সমস্ত এক্সিকিউটেবল ও ডিএলএল সংগ্রহ
           Get-ChildItem -Path "build_x64" -Recurse -Include "winvnc.exe", "vncviewer.exe", "*.dll" | ForEach-Object {
               Copy-Item -Path $_.FullName -Destination "output" -Force
           }
