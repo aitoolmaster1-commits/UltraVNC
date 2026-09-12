@@ -1,0 +1,38 @@
+name: Build UltraVNC EXE via GitHub Actions
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build UltraVNC Solution (x64 Release)
+        shell: cmd
+        run: |
+          msbuild UltraVNC.sln /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /m
+
+      - name: Collect Binaries
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "output" -Force
+          Get-ChildItem -Path "." -Recurse -Include "winvnc.exe", "vncviewer.exe" | ForEach-Object {
+              Copy-Item -Path $_.FullName -Destination "output" -Force
+          }
+
+      - name: Upload Built EXE Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: UltraVNC-Binaries-x64
+          path: output/
