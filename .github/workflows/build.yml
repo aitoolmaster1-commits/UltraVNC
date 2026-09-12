@@ -9,6 +9,9 @@ jobs:
   build:
     runs-on: windows-2022
 
+    env:
+      VCPKG_ROOT: 'C:\vcpkg'
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -24,20 +27,30 @@ jobs:
               Remove-Item -Path "UltraVNC-main" -Recurse -Force
           }
 
-      - name: Setup MSBuild & Visual Studio Environment
+      - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build via CMake
+      - name: Integrate and Install vcpkg Dependencies
         shell: pwsh
         run: |
-          # Create build directory
+          cd C:\vcpkg
+          .\vcpkg.exe integrate install
+          # Install zlib and common compression codecs
+          .\vcpkg.exe install zlib:x64-windows libjpeg-turbo:x64-windows lzo:x64-windows zstd:x64-windows
+
+      - name: Configure and Build via CMake
+        shell: pwsh
+        run: |
           New-Item -ItemType Directory -Path "build_x64" -Force
           Set-Location "build_x64"
 
-          # Configure with CMake targeting Visual Studio 2022 (v143, x64)
-          cmake ../cmake -A x64 -DCMAKE_BUILD_TYPE=Release
+          # Configure CMake with vcpkg toolchain integration
+          cmake ../cmake -A x64 `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET="x64-windows"
 
-          # Build all targets
+          # Compile the entire solution
           cmake --build . --config Release --parallel
 
       - name: Collect Binaries
@@ -45,17 +58,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path "output" -Force
           
-          # Find and copy all built binaries
-          Get-ChildItem -Path "build_x64" -Recurse -Include "winvnc.exe", "vncviewer.exe", "vnchooks.dll", "repeater.exe" | ForEach-Object {
+          # Copy all generated executable and dll files
+          Get-ChildItem -Path "build_x64" -Recurse -Include "winvnc.exe", "vncviewer.exe", "*.dll" | ForEach-Object {
               Copy-Item -Path $_.FullName -Destination "output" -Force
-          }
-
-          # Check if binaries were collected
-          if ((Get-ChildItem -Path "output").Count -eq 0) {
-              Write-Warning "CMake output not found, scanning root..."
-              Get-ChildItem -Path "." -Recurse -Include "winvnc.exe", "vncviewer.exe" | ForEach-Object {
-                  Copy-Item -Path $_.FullName -Destination "output" -Force
-              }
           }
 
       - name: Upload Built Binaries
