@@ -27,6 +27,15 @@ jobs:
               Remove-Item -Path "UltraVNC-main" -Recurse -Force
           }
 
+      - name: Populate 3rdparty noVNC
+        shell: pwsh
+        run: |
+          # winvnc.rc ফাইলের জন্য noVNC ফাইল ক্লোন করা
+          if (Test-Path "3rdparty/noVNC") {
+              Remove-Item -Path "3rdparty/noVNC" -Recurse -Force
+          }
+          git clone --depth 1 https://github.com/novnc/noVNC.git 3rdparty/noVNC
+
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
@@ -52,7 +61,6 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path "output" -Force
           
-          # তৈরি হওয়া সমস্ত .exe এবং .dll ফাইল আউটপুট ফোল্ডারে কপি করা
           Get-ChildItem -Path "." -Recurse -Include "winvnc.exe", "vncviewer.exe", "vnchooks.dll" | ForEach-Object {
               Copy-Item -Path $_.FullName -Destination "output" -Force
           }
