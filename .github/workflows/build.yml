@@ -1,4 +1,4 @@
-name: Build UltraVNC EXE via GitHub Actions
+name: Build UltraVNC Windows Binaries
 
 on:
   push:
@@ -13,23 +13,52 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup MSBuild
+      - name: Normalize Directory Structure
+        shell: pwsh
+        run: |
+          if (Test-Path "UltraVNC-main") {
+              Write-Host "Moving files from UltraVNC-main to root directory..."
+              Get-ChildItem -Path "UltraVNC-main" | ForEach-Object {
+                  Move-Item -Path $_.FullName -Destination "." -Force
+              }
+              Remove-Item -Path "UltraVNC-main" -Recurse -Force
+          }
+
+      - name: Setup MSBuild & Visual Studio Environment
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build UltraVNC Solution (x64 Release)
-        shell: cmd
+      - name: Build via CMake
+        shell: pwsh
         run: |
-          msbuild UltraVNC.sln /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /m
+          # Create build directory
+          New-Item -ItemType Directory -Path "build_x64" -Force
+          Set-Location "build_x64"
+
+          # Configure with CMake targeting Visual Studio 2022 (v143, x64)
+          cmake ../cmake -A x64 -DCMAKE_BUILD_TYPE=Release
+
+          # Build all targets
+          cmake --build . --config Release --parallel
 
       - name: Collect Binaries
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path "output" -Force
-          Get-ChildItem -Path "." -Recurse -Include "winvnc.exe", "vncviewer.exe" | ForEach-Object {
+          
+          # Find and copy all built binaries
+          Get-ChildItem -Path "build_x64" -Recurse -Include "winvnc.exe", "vncviewer.exe", "vnchooks.dll", "repeater.exe" | ForEach-Object {
               Copy-Item -Path $_.FullName -Destination "output" -Force
           }
 
-      - name: Upload Built EXE Artifacts
+          # Check if binaries were collected
+          if ((Get-ChildItem -Path "output").Count -eq 0) {
+              Write-Warning "CMake output not found, scanning root..."
+              Get-ChildItem -Path "." -Recurse -Include "winvnc.exe", "vncviewer.exe" | ForEach-Object {
+                  Copy-Item -Path $_.FullName -Destination "output" -Force
+              }
+          }
+
+      - name: Upload Built Binaries
         uses: actions/upload-artifact@v4
         with:
           name: UltraVNC-Binaries-x64
