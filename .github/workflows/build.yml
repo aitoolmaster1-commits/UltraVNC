@@ -30,41 +30,35 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Integrate and Install vcpkg Dependencies
+      - name: Install vcpkg Dependencies
         shell: pwsh
         run: |
           cd C:\vcpkg
           .\vcpkg.exe integrate install
-          # UltraVNC CMake-এর জন্য প্রয়োজনীয় সব কম্প্রেশন ও ইমেজ লাইব্রেরি
-          .\vcpkg.exe install zlib:x64-windows liblzma:x64-windows libjpeg-turbo:x64-windows lzo:x64-windows zstd:x64-windows
+          .\vcpkg.exe install --triplet x64-windows zlib liblzma libjpeg-turbo lzo zstd openssl libpng
 
-      - name: Configure and Build via CMake
-        shell: pwsh
+      - name: Build Server (WinVNC & Hooks) via MSBuild
+        shell: cmd
         run: |
-          New-Item -ItemType Directory -Path "build_x64" -Force
-          Set-Location "build_x64"
+          msbuild winvnc\winvnc.sln /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /m
 
-          # CMake কনফিগারেশন vcpkg টুলচেনসহ
-          cmake ../cmake -A x64 `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET="x64-windows"
+      - name: Build Viewer (VncViewer) via MSBuild
+        shell: cmd
+        run: |
+          msbuild vncviewer\vncviewer.sln /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /m
 
-          # প্যারালাল বিল্ড
-          cmake --build . --config Release --parallel
-
-      - name: Collect Binaries
+      - name: Collect Built Binaries
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path "output" -Force
           
-          # তৈরি হওয়া সমস্ত এক্সিকিউটেবল ও ডিএলএল সংগ্রহ
-          Get-ChildItem -Path "build_x64" -Recurse -Include "winvnc.exe", "vncviewer.exe", "*.dll" | ForEach-Object {
+          # তৈরি হওয়া সমস্ত .exe এবং .dll ফাইল আউটপুট ফোল্ডারে কপি করা
+          Get-ChildItem -Path "." -Recurse -Include "winvnc.exe", "vncviewer.exe", "vnchooks.dll" | ForEach-Object {
               Copy-Item -Path $_.FullName -Destination "output" -Force
           }
 
-      - name: Upload Built Binaries
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: UltraVNC-Binaries-x64
+          name: UltraVNC-Windows-x64
           path: output/
